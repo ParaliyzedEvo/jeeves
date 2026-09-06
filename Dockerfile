@@ -48,4 +48,4 @@ RUN addgroup -g 1001 -S nodejs && \
 USER nodejs
 
 # Start the bot
-CMD ["npm run deploy:commands && npm start"]
+CMD ["sh", "-c", "npm run deploy:commands && npm start"]
