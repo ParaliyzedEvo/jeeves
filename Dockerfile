@@ -48,4 +48,4 @@ RUN addgroup -g 1001 -S nodejs && \
 USER nodejs
 
 # Start the bot
-CMD ["node", "dist/index.js"]
+CMD ["./start.sh"]
