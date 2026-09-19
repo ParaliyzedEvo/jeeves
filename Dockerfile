@@ -41,11 +41,5 @@ COPY --from=builder /app/dist ./dist
 # Create data directory for persistent storage
 RUN mkdir -p /app/data
 
-# Run as non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001 && \
-    chown -R nodejs:nodejs /app
-USER nodejs
-
 # Start the bot
 CMD ["sh", "-c", "npm run deploy:commands && npm start"]
