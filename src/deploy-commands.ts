@@ -6,22 +6,25 @@ const rest = new REST({ version: '10' }).setToken(config.token);
 
 async function main() {
   const payload = commands.map((command) => command.data.toJSON());
-  try {
-    console.log('Registering slash commands...');
-    if (config.guildId) {
-      await rest.put(Routes.applicationGuildCommands(config.clientId, config.guildId), {
-        body: payload,
-      });
-      console.log('Registered commands for guild', config.guildId);
-    } else {
-      await rest.put(Routes.applicationCommands(config.clientId), {
-        body: payload,
-      });
-      console.log('Registered global commands');
+  const route = config.guildId
+    ? Routes.applicationGuildCommands(config.clientId, config.guildId)
+    : Routes.applicationCommands(config.clientId);
+  const scope = config.guildId ? `guild ${config.guildId}` : 'global';
+
+  console.log('Registering slash commands...');
+  let failed = 0;
+
+  // POST upserts by name, so commands from other services are left alone
+  for (const cmd of payload) {
+    try {
+      await rest.post(route, { body: cmd });
+    } catch (error) {
+      failed++;
+      console.error(`Failed to register /${cmd.name}`, error);
     }
-  } catch (error) {
-    console.error('Failed to register commands', error);
   }
+
+  console.log(`Registered ${payload.length - failed}/${payload.length} ${scope} commands (upsert)`);
 }
 
 main();
