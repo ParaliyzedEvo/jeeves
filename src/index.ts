@@ -3,6 +3,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   Client,
+  DiscordAPIError,
   EmbedBuilder,
   Events,
   GatewayIntentBits,
@@ -30,6 +31,12 @@ const client = new Client({
 });
 
 const commandMap = new Map(commands.map((command) => [command.data.name, command]));
+
+// 10062 = Unknown interaction, 40060 = already acknowledged.
+// With a shared bot token, another service may answer the same interaction first.
+const BENIGN_DISCORD_CODES = new Set([10062, 40060]);
+const isBenignDiscordError = (error: unknown) =>
+  error instanceof DiscordAPIError && BENIGN_DISCORD_CODES.has(Number(error.code));
 
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Jeeves is online as ${readyClient.user.tag}`);
@@ -125,10 +132,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   const command = commandMap.get(interaction.commandName);
 
-  if (!command) {
-    await interaction.reply({ content: 'Unknown command.', flags: MessageFlags.Ephemeral });
-    return;
-  }
+  // Not ours: another service sharing this bot token owns this command. Stay silent.
+  if (!command) return;
 
   try {
     if (command.requiredRole) {
@@ -137,14 +142,23 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
     await command.execute(interaction);
   } catch (error) {
+    if (isBenignDiscordError(error)) return;
     console.error(`Error handling command ${interaction.commandName}`, error);
     const message = 'Something went wrong while executing that command.';
-    if (interaction.deferred || interaction.replied) {
-      await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral });
-    } else {
-      await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+    try {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.followUp({ content: message, flags: MessageFlags.Ephemeral });
+      } else {
+        await interaction.reply({ content: message, flags: MessageFlags.Ephemeral });
+      }
+    } catch (replyError) {
+      if (!isBenignDiscordError(replyError)) console.error('Failed to send error reply', replyError);
     }
   }
+});
+
+client.on(Events.Error, (error) => {
+  if (!isBenignDiscordError(error)) console.error('Discord client error', error);
 });
 
 process.on('unhandledRejection', (error) => {
